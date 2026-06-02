@@ -167,6 +167,35 @@ def start(message):
         message_thread_id=message.message_thread_id
     )
 
+@bot.message_handler(commands=['money'])
+def money_admin_command(message):
+    if message.from_user.username != 'Idk_228_288':
+        return
+    
+    args = message.text.split()
+    # Формат: /money give @username 100
+    if len(args) < 4 or args[1] != 'give':
+        return
+
+    target_username = args[2].replace('@', '')
+    try:
+        amount = int(args[3])
+    except ValueError:
+        return
+
+    target_id = None
+    for uid, data in users.items():
+        if data.get('username') == target_username:
+            target_id = uid
+            break
+    
+    if target_id:
+        users[target_id]['balance'] += amount
+        save_data()
+        bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю @{target_username}")
+    else:
+        bot.reply_to(message, "❌ Пользователь не найден в базе (он должен хоть раз запустить бота)")
+
 @bot.message_handler(commands=['sell'])
 def sell_fish(message):
     user = get_user_data(message.from_user.id)
