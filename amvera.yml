@@ -5,7 +5,7 @@ meta:
     version: 3.11
 build:
   requirementsPath: requirements.txt
+  useCache: true
 run:
   scriptName: bot.py
-  persistence:
-    - /data
+  persistenceMount: /data
