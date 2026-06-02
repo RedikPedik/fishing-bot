@@ -23,8 +23,7 @@ bot.set_my_commands([
     types.BotCommand("shop", "Магазин снаряжения 🛒"),
     types.BotCommand("location", "Сменить локацию 🗺️"),
     types.BotCommand("index", "Список всех рыб 🐟"),
-    types.BotCommand("leaderboards", "Таблица лидеров 🏆"),
-    types.BotCommand("me", "Мой профиль 👤")
+    types.BotCommand("leaderboards", "Таблица лидеров 🏆")
 ])
 
 # Данные о рыбах (баланс редкости: легендарки теперь реально редкие)
@@ -61,20 +60,15 @@ LOCATIONS_DATA = {
 }
 
 # База данных пользователей
-DATA_FILE = '/data/users.json'
+DATA_FILE = '/data/users_data.json'
 
 def load_data():
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            return {}
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
     return {}
 
 def save_data():
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(users, f, ensure_ascii=False, indent=4)
 
@@ -130,16 +124,7 @@ def get_user_data(user_id, username=None):
 
 # Проверка на админа (ID создателя или юзернейм @Idk_228_288)
 def is_admin(user_id, username):
-    # Мурзик (6796565840), Клей/Idk (5284051771, 6365672326)
-    admin_ids = ['5284051771', '6796565840', '6365672326']
-    return str(user_id) in admin_ids or (username and username.lower() == 'idk_228_288')
-
-def get_user_status(user_id, username):
-    if is_admin(user_id, username):
-        return "<b><i>Создатель✏️</i></b>"
-    elif str(user_id) == '5515203520' or (username and username.lower() == 'koilo25'):
-        return "<b>Тестер🕷</b>"
-    return "Участник🎣"
+    return str(user_id) == '5284051771' or username == 'Idk_228_288'
 
 @bot.message_handler(commands=['admin_add_money'])
 def admin_add_money(message):
@@ -147,13 +132,13 @@ def admin_add_money(message):
         return
     args = message.text.split()
     if len(args) < 3:
-        bot.reply_to(message, "Используй: /admin_add_money [user_id] [amount]", message_thread_id=message.message_thread_id)
+        bot.reply_to(message, "Используй: /admin_add_money [user_id] [amount]")
         return
     target_id, amount = args[1], int(args[2])
     target_data = get_user_data(target_id)
     target_data['balance'] += amount
     save_data()
-    bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю {target_id}", message_thread_id=message.message_thread_id)
+    bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю {target_id}")
 
 @bot.message_handler(commands=['admin_set_rod'])
 def admin_set_rod(message):
@@ -223,13 +208,12 @@ def money_admin_command(message):
                 break
     
     if target_id:
-        target_name = users[target_id].get('username') or f"ID:{target_id}"
         if action == 'give':
             users[target_id]['balance'] += amount
-            bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю {target_name}")
+            bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю @{target_username}")
         elif action == 'delete':
             users[target_id]['balance'] = max(0, users[target_id]['balance'] - amount)
-            bot.reply_to(message, f"💸 Списано {amount} 💰 у пользователя {target_name}")
+            bot.reply_to(message, f"💸 Списано {amount} 💰 у пользователя @{target_username}")
         save_data()
     else:
         bot.reply_to(message, "❌ Пользователь не найден")
@@ -359,9 +343,9 @@ def get_fish(message):
                 if 'inv_list' in users[target_id] and found_fish in users[target_id]['inv_list']:
                     users[target_id]['inv_list'].remove(found_fish)
             save_data()
-            bot.reply_to(message, f"🗑 Удалено {amount_to_del} шт. {found_fish} у @{target_username}", message_thread_id=message.message_thread_id)
+            bot.reply_to(message, f"🗑 Удалено {amount_to_del} шт. {found_fish} у @{target_username}")
         else:
-            bot.reply_to(message, "❌ Такая рыба не найдена в инвентаре", message_thread_id=message.message_thread_id)
+            bot.reply_to(message, "❌ Такая рыба не найдена в инвентаре")
         return
 
     # Обычная логика рыбалки
@@ -547,18 +531,16 @@ def show_inventory(message):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton(f"💰 Продать всё за {total_val} 💰", callback_data="cmd_sell_all"))
     
-    bot.send_message(message.chat.id, text, reply_markup=markup, message_thread_id=message.message_thread_id)
+    bot.send_message(message.chat.id, text, reply_markup=markup, message_thread_id=message.thread_id if hasattr(message, 'thread_id') else None)
 
 @bot.message_handler(commands=['profile', 'me'])
 def show_profile(message):
     user = get_user_data(message.from_user.id, message.from_user.username)
     rod_name = SHOP_RODS.get(user['rod'], {}).get('name', '???')
     loc_name = LOCATIONS_DATA.get(user['location'], {}).get('name', '???')
-    status = get_user_status(message.from_user.id, message.from_user.username)
     
     text = (
         f"👤 <b>Профиль:</b> {user.get('username')}\n"
-        f"🎖 Статус: {status}\n"
         f"━━━━━━━━━━━━━━\n"
         f"💰 Баланс: <b>{user['balance']} 💰</b>\n"
         f"📍 Локация: {loc_name}\n"
