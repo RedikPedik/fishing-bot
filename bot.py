@@ -51,7 +51,7 @@ SHOP_BAITS = {
 }
 
 # База данных пользователей
-DATA_FILE = 'users_data.json'
+DATA_FILE = '/data/users_data.json'
 
 def load_data():
     if os.path.exists(DATA_FILE):
