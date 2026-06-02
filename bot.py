@@ -60,15 +60,20 @@ LOCATIONS_DATA = {
 }
 
 # База данных пользователей
-DATA_FILE = 'fishing_bot/data/users.json'
+DATA_FILE = '/data/users.json'
 
 def load_data():
+    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
     return {}
 
 def save_data():
+    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(users, f, ensure_ascii=False, indent=4)
 
