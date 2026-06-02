@@ -132,12 +132,12 @@ def get_user_data(user_id, username=None):
 def is_admin(user_id, username):
     # Мурзик (6796565840), Клей/Idk (5284051771, 6365672326)
     admin_ids = ['5284051771', '6796565840', '6365672326']
-    return str(user_id) in admin_ids or username == 'Idk_228_288'
+    return str(user_id) in admin_ids or (username and username.lower() == 'idk_228_288')
 
 def get_user_status(user_id, username):
     if is_admin(user_id, username):
         return "<b><i>Создатель✏️</i></b>"
-    elif str(user_id) == '5515203520' or username == 'Koilo25':
+    elif str(user_id) == '5515203520' or (username and username.lower() == 'koilo25'):
         return "<b>Тестер🕷</b>"
     return "Участник🎣"
 
