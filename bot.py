@@ -26,14 +26,14 @@ bot.set_my_commands([
     types.BotCommand("leaderboards", "Таблица лидеров 🏆")
 ])
 
-# Данные о рыбах
+# Данные о рыбах (Шансы перевернуты по просьбе админа)
 FISH_DATA = {
-    '⬜ Обычная': {'rarity': 60, 'cost_range': (10, 50), 'fishes': ['Карась', 'Окунь', 'Плотва']},
-    '🟩🟩 Редкая': {'rarity': 25, 'cost_range': (60, 150), 'fishes': ['Щука', 'Судак', 'Лещ']},
+    '🟨🟨🟨🟨🟨🟨 Легендарная': {'rarity': 40, 'cost_range': (10000, 50000), 'fishes': ['Мегалодон', 'Посейдон']},
+    '🟥🟥🟥🟥🟥 Мифическая': {'rarity': 30, 'cost_range': (2000, 5000), 'fishes': ['Золотая рыбка', 'Кракен']},
+    '🟪🟪🟪🟪 Эпическая': {'rarity': 15, 'cost_range': (600, 1500), 'fishes': ['Осетр', 'Белуга']},
     '🟦🟦🟦 Сверх редкая': {'rarity': 10, 'cost_range': (200, 500), 'fishes': ['Сом', 'Угорь', 'Стерлядь']},
-    '🟪🟪🟪🟪 Эпическая': {'rarity': 4, 'cost_range': (600, 1500), 'fishes': ['Осетр', 'Белуга']},
-    '🟥🟥🟥🟥🟥 Мифическая': {'rarity': 0.9, 'cost_range': (2000, 5000), 'fishes': ['Золотая рыбка', 'Кракен']},
-    '🟨🟨🟨🟨🟨🟨 Легендарная': {'rarity': 0.1, 'cost_range': (10000, 50000), 'fishes': ['Мегалодон', 'Посейдон']}
+    '🟩🟩 Редкая': {'rarity': 4, 'cost_range': (60, 150), 'fishes': ['Щука', 'Судак', 'Лещ']},
+    '⬜ Обычная': {'rarity': 1, 'cost_range': (10, 50), 'fishes': ['Карась', 'Окунь', 'Плотва']}
 }
 
 SHOP_RODS = {
@@ -278,7 +278,7 @@ def get_fish(message):
     current_loc = LOCATIONS_DATA.get(user.get('location', '0'), LOCATIONS_DATA['0'])
     luck = current_loc['luck']
     
-    msg = bot.send_message(message.chat.id, f"📍 {current_loc['name']}\nУдочка: {current_rod['name']}🎣{bait_text}\nЗакидываем...", message_thread_id=message.message_thread_id)
+    msg = bot.send_message(message.chat.id, f"📍 Локация: {current_loc['name']}\n🦾 Снаряжение: {current_rod['name']} 🎣{bait_text}\n\n🌊 Закидываем удочку...", message_thread_id=message.message_thread_id)
     
     # Удача влияет на шанс: делим ролл на коэффициент удачи
     rand = (random.random() * 100) / luck
@@ -300,7 +300,34 @@ def get_fish(message):
     user['last_fish'] = time.time()
     save_data()
     result = (f"🎉 Вы выловили рыбу!\n\nРыба: {full_name}\nСтоимость: {cost} 💰\n\nРыба добавлена в инвентарь. Продай её через /sell")
-    bot.edit_message_text(result, message.chat.id, msg.message_id)
+    
+    # В личке добавляем кнопки для удобства, в группах — только текст
+    markup = None
+    if message.chat.type == 'private':
+        markup = types.InlineKeyboardMarkup()
+        markup.row(
+            types.InlineKeyboardButton("🎣 Еще раз", callback_data="cmd_fish"),
+            types.InlineKeyboardButton("📦 Инвентарь", callback_data="cmd_inventory")
+        )
+        markup.row(types.InlineKeyboardButton("💰 Продать всё", callback_data="cmd_sell_all"))
+
+    bot.edit_message_text(result, message.chat.id, msg.message_id, reply_markup=markup)
+
+# Обработка быстрых команд через кнопки в ЛС
+@bot.callback_query_handler(func=lambda call: call.data.startswith('cmd_'))
+def handle_quick_commands(call):
+    cmd = call.data.replace('cmd_', '')
+    # Эмулируем объект сообщения для существующих функций
+    call.message.from_user = call.from_user 
+    if cmd == 'fish':
+        get_fish(call.message)
+    elif cmd == 'inventory':
+        show_inventory(call.message)
+    elif cmd == 'sell_all':
+        # Создаем временный объект сообщения для команды /sell all
+        call.message.text = "/sell all"
+        sell_fish(call.message)
+    bot.answer_callback_query(call.id)
 
 @bot.message_handler(commands=['leaderboards'])
 def show_leaderboards(message):
