@@ -60,7 +60,7 @@ LOCATIONS_DATA = {
 }
 
 # База данных пользователей
-DATA_FILE = 'users_data.json'
+DATA_FILE = 'fishing_bot/data/users.json'
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -124,12 +124,14 @@ def get_user_data(user_id, username=None):
 
 # Проверка на админа (ID создателя или юзернейм @Idk_228_288)
 def is_admin(user_id, username):
-    return str(user_id) == '5284051771' or username == 'Idk_228_288'
+    # Мурзик (6796565840), Клей/Idk (5284051771, 6365672326)
+    admin_ids = ['5284051771', '6796565840', '6365672326']
+    return str(user_id) in admin_ids or username == 'Idk_228_288'
 
 def get_user_status(user_id, username):
     if is_admin(user_id, username):
         return "<b><i>Создатель✏️</i></b>"
-    elif username == 'Koilo25':
+    elif str(user_id) == '5515203520' or username == 'Koilo25':
         return "<b>Тестер🕷</b>"
     return "Участник🎣"
 
