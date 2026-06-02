@@ -60,7 +60,7 @@ LOCATIONS_DATA = {
 }
 
 # База данных пользователей
-DATA_FILE = '/data/users_data.json'
+DATA_FILE = 'users_data.json'
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -126,19 +126,26 @@ def get_user_data(user_id, username=None):
 def is_admin(user_id, username):
     return str(user_id) == '5284051771' or username == 'Idk_228_288'
 
+def get_user_status(user_id, username):
+    if is_admin(user_id, username):
+        return "<b><i>Создатель✏️</i></b>"
+    elif username == 'Koilo25':
+        return "<b>Тестер🕷</b>"
+    return "Участник🎣"
+
 @bot.message_handler(commands=['admin_add_money'])
 def admin_add_money(message):
     if not is_admin(message.from_user.id, message.from_user.username):
         return
     args = message.text.split()
     if len(args) < 3:
-        bot.reply_to(message, "Используй: /admin_add_money [user_id] [amount]")
+        bot.reply_to(message, "Используй: /admin_add_money [user_id] [amount]", message_thread_id=message.message_thread_id)
         return
     target_id, amount = args[1], int(args[2])
     target_data = get_user_data(target_id)
     target_data['balance'] += amount
     save_data()
-    bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю {target_id}")
+    bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю {target_id}", message_thread_id=message.message_thread_id)
 
 @bot.message_handler(commands=['admin_set_rod'])
 def admin_set_rod(message):
@@ -191,25 +198,30 @@ def money_admin_command(message):
         return
 
     action = args[1].lower()
-    target_username = args[2].replace('@', '')
+    target = args[2].replace('@', '')
     try:
         amount = int(args[3])
     except ValueError:
         return
 
     target_id = None
-    for uid, data in users.items():
-        if data.get('username') == target_username:
-            target_id = uid
-            break
+    if target.isdigit():
+        if target in users:
+            target_id = target
+    else:
+        for uid, data in users.items():
+            if data.get('username') == target:
+                target_id = uid
+                break
     
     if target_id:
+        target_name = users[target_id].get('username') or f"ID:{target_id}"
         if action == 'give':
             users[target_id]['balance'] += amount
-            bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю @{target_username}")
+            bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю {target_name}")
         elif action == 'delete':
             users[target_id]['balance'] = max(0, users[target_id]['balance'] - amount)
-            bot.reply_to(message, f"💸 Списано {amount} 💰 у пользователя @{target_username}")
+            bot.reply_to(message, f"💸 Списано {amount} 💰 у пользователя {target_name}")
         save_data()
     else:
         bot.reply_to(message, "❌ Пользователь не найден")
@@ -339,9 +351,9 @@ def get_fish(message):
                 if 'inv_list' in users[target_id] and found_fish in users[target_id]['inv_list']:
                     users[target_id]['inv_list'].remove(found_fish)
             save_data()
-            bot.reply_to(message, f"🗑 Удалено {amount_to_del} шт. {found_fish} у @{target_username}")
+            bot.reply_to(message, f"🗑 Удалено {amount_to_del} шт. {found_fish} у @{target_username}", message_thread_id=message.message_thread_id)
         else:
-            bot.reply_to(message, "❌ Такая рыба не найдена в инвентаре")
+            bot.reply_to(message, "❌ Такая рыба не найдена в инвентаре", message_thread_id=message.message_thread_id)
         return
 
     # Обычная логика рыбалки
@@ -392,6 +404,7 @@ def get_fish(message):
     if full_name not in user['inventory']:
         user['inventory'][full_name] = {'count': 0, 'price': cost}
         # Инициализируем список для /sell, если его нет
+    # Если рыба уже есть, цену не меняем, чтобы не сбивать бонус от наживки
         if 'inv_list' not in user:
             user['inv_list'] = []
         if full_name not in user['inv_list']:
@@ -432,11 +445,12 @@ def handle_quick_commands(call):
 
 @bot.message_handler(commands=['leaderboards'])
 def show_leaderboards(message):
+    get_user_data(message.from_user.id, message.from_user.username)
     markup = types.InlineKeyboardMarkup()
     btn_global = types.InlineKeyboardButton("🌍 Глобальный", callback_data="lb_global")
     btn_group = types.InlineKeyboardButton("👥 В этой группе", callback_data="lb_group")
     markup.add(btn_global, btn_group)
-    bot.send_message(message.chat.id, "🏆 **Выберите таблицу лидеров по деньгам:**", reply_markup=markup, parse_mode='Markdown', message_thread_id=message.message_thread_id)
+    bot.send_message(message.chat.id, "🏆 <b>Выберите таблицу лидеров по деньгам:</b>", reply_markup=markup, parse_mode='HTML', message_thread_id=message.message_thread_id)
 
 @bot.message_handler(commands=['location'])
 def show_locations(message):
@@ -513,10 +527,37 @@ def show_inventory(message):
         return
     text = f"📦 Твой инвентарь:\n\n"
     user['inv_list'] = list(user['inventory'].keys())
+    total_val = 0
     for i, name in enumerate(user['inv_list'], 1):
-        text += f"{i}. {name} — {user['inventory'][name]['count']} шт. (цена: {user['inventory'][name]['price']})\n"
-    text += f"\n💰 Баланс: {user['balance']} 💰\n\nПродать: /sell [номер] [кол-во]"
-    bot.send_message(message.chat.id, text, message_thread_id=message.message_thread_id)
+        count = user['inventory'][name]['count']
+        price = user['inventory'][name]['price']
+        text += f"{i}. {name} — {count} шт. (цена: {price})\n"
+        total_val += count * price
+    
+    text += f"\n💰 Баланс: {user['balance']} 💰"
+    
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(f"💰 Продать всё за {total_val} 💰", callback_data="cmd_sell_all"))
+    
+    bot.send_message(message.chat.id, text, reply_markup=markup, message_thread_id=message.message_thread_id)
+
+@bot.message_handler(commands=['profile', 'me'])
+def show_profile(message):
+    user = get_user_data(message.from_user.id, message.from_user.username)
+    rod_name = SHOP_RODS.get(user['rod'], {}).get('name', '???')
+    loc_name = LOCATIONS_DATA.get(user['location'], {}).get('name', '???')
+    status = get_user_status(message.from_user.id, message.from_user.username)
+    
+    text = (
+        f"👤 <b>Профиль:</b> {user.get('username')}\n"
+        f"🎖 Статус: {status}\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"💰 Баланс: <b>{user['balance']} 💰</b>\n"
+        f"📍 Локация: {loc_name}\n"
+        f"🎣 Удочка: {rod_name}\n"
+        f"📊 Всего выловлено: {user['stats'].get('total_caught', 0)} шт."
+    )
+    bot.send_message(message.chat.id, text, parse_mode='HTML', message_thread_id=message.message_thread_id)
 
 @bot.message_handler(commands=['shop'])
 def show_shop(message):
@@ -555,17 +596,34 @@ def handle_leaderboards(call):
     sorted_users = sorted(users.items(), key=lambda x: x[1].get('balance', 0), reverse=True)
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("⬅️ Назад", callback_data="lb_menu"))
+    
     if call.data == "lb_menu":
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🌍 Глобальный", callback_data="lb_global"), types.InlineKeyboardButton("👥 Группа", callback_data="lb_group"))
-        bot.edit_message_text("🏆 **Выберите таблицу лидеров:**", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown')
+        bot.edit_message_text("🏆 <b>Выберите таблицу лидеров:</b>", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='HTML')
         return
-    text = "🌍 **Глобальный топ:**\n\n" if call.data == "lb_global" else "👥 **Топ группы:**\n\n"
-    for i, (uid, data) in enumerate(sorted_users[:10], 1):
-        name = data.get('username', f'ID {uid}')
-        text += f"{i}. {name} — {data.get('balance', 0)} 💰\n"
+
+    is_global = call.data == "lb_global"
+    text = "🌍 <b>Глобальный топ:</b>\n\n" if is_global else "👥 <b>Топ группы:</b>\n\n"
+    
+    count = 0
+    for uid, data in sorted_users:
+        if count >= 10: break
+        
+        if not is_global:
+            # Для топа группы проверяем, состоит ли юзер в чате
+            try:
+                member = bot.get_chat_member(call.message.chat.id, int(uid))
+                if member.status in ['left', 'kicked']: continue
+            except:
+                continue
+        
+        count += 1
+        name = data.get('username', f'ID {uid}').replace('<', '&lt;').replace('>', '&gt;')
+        text += f"{count}. {name} — {data.get('balance', 0)} 💰\n"
+        
     bot.answer_callback_query(call.id)
-    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown')
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='HTML')
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('shop_page_'))
 def shop_nav(call):
@@ -579,6 +637,12 @@ def buy_item(call):
     item_type, item_id = parts[1], parts[2]
     if item_type == 'rod':
         item = SHOP_RODS[item_id]
+        
+        # Проверка на даунгрейд
+        if int(user['rod']) >= int(item_id):
+            bot.answer_callback_query(call.id, "❌ У тебя уже есть удочка получше!", show_alert=True)
+            return
+
         if user['balance'] >= item['cost']:
             user['balance'] -= item['cost']
             user['rod'] = item_id
