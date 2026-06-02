@@ -113,6 +113,7 @@ def get_user_data(user_id, username=None):
         'location': '0',
         'unlocked_locations': ['0'],
         'baits': {},
+        'inv_list': [],
         'stats': {'total_caught': 0, 'total_earned': 0}
     }
     for key, value in defaults.items():
@@ -347,11 +348,17 @@ def get_fish(message):
     user = get_user_data(message.from_user.id, message.from_user.username)
     current_rod = SHOP_RODS.get(user.get('rod', '0'), SHOP_RODS['0'])
     cd = current_rod['cd']
+    
     if time.time() - user['last_fish'] < cd:
         wait = round(cd - (time.time() - user['last_fish']), 1)
         warn_msg = bot.send_message(message.chat.id, f"⏳ Удочка еще не готова! Подожди {wait} сек.", message_thread_id=message.message_thread_id)
         delete_after_delay(message.chat.id, [message.message_id, warn_msg.message_id])
         return
+
+    # Сразу обновляем время заброса, чтобы пресечь спам
+    user['last_fish'] = time.time()
+    save_data()
+
     multiplier = 1.0
     bait_text = ""
     available_baits = [bid for bid, count in user['baits'].items() if count > 0]
@@ -381,10 +388,17 @@ def get_fish(message):
     base_cost = random.randint(*fish_info['cost_range'])
     cost = int(base_cost * multiplier)
     full_name = f"{selected_rarity} {fish_name}"
+    
     if full_name not in user['inventory']:
         user['inventory'][full_name] = {'count': 0, 'price': cost}
+        # Инициализируем список для /sell, если его нет
+        if 'inv_list' not in user:
+            user['inv_list'] = []
+        if full_name not in user['inv_list']:
+            user['inv_list'].append(full_name)
+            
     user['inventory'][full_name]['count'] += 1
-    user['last_fish'] = time.time()
+    user['stats']['total_caught'] = user['stats'].get('total_caught', 0) + 1
     save_data()
     result = (f"🎉 Вы выловили рыбу!\n\nРыба: {full_name}\nСтоимость: {cost} 💰\n\nРыба добавлена в инвентарь. Продай её через /sell")
     
