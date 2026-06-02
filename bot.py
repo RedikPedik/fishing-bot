@@ -182,13 +182,14 @@ def start(message):
 
 @bot.message_handler(commands=['money'])
 def money_admin_command(message):
-    if message.from_user.username != 'Idk_228_288':
+    if not is_admin(message.from_user.id, message.from_user.username):
         return
     
     args = message.text.split()
-    if len(args) < 4 or args[1] != 'give':
+    if len(args) < 4:
         return
 
+    action = args[1].lower()
     target_username = args[2].replace('@', '')
     try:
         amount = int(args[3])
@@ -202,11 +203,100 @@ def money_admin_command(message):
             break
     
     if target_id:
-        users[target_id]['balance'] += amount
+        if action == 'give':
+            users[target_id]['balance'] += amount
+            bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю @{target_username}")
+        elif action == 'delete':
+            users[target_id]['balance'] = max(0, users[target_id]['balance'] - amount)
+            bot.reply_to(message, f"💸 Списано {amount} 💰 у пользователя @{target_username}")
         save_data()
-        bot.reply_to(message, f"✅ Выдано {amount} 💰 пользователю @{target_username}")
     else:
-        bot.reply_to(message, "❌ Пользователь не найден в базе (он должен хоть раз запустить бота)")
+        bot.reply_to(message, "❌ Пользователь не найден")
+
+@bot.message_handler(commands=['fish'])
+def fish_admin_delete(message):
+    if not is_admin(message.from_user.id, message.from_user.username):
+        return
+    
+    args = message.text.split()
+    # Проверяем, что это именно админская команда удаления, а не обычная рыбалка
+    if len(args) < 5 or args[1].lower() != 'delete':
+        return
+
+    target_username = args[2].replace('@', '')
+    fish_name_query = args[3].lower()
+    try:
+        amount_to_del = int(args[4])
+    except ValueError:
+        return
+
+    target_id = None
+    for uid, data in users.items():
+        if data.get('username') == target_username:
+            target_id = uid
+            break
+            
+    if not target_id:
+        bot.reply_to(message, "❌ Пользователь не найден")
+        return
+
+    user_inv = users[target_id].get('inventory', {})
+    found_fish = None
+    for full_name in user_inv.keys():
+        if fish_name_query in full_name.lower():
+            found_fish = full_name
+            break
+            
+    if found_fish:
+        current_count = user_inv[found_fish]['count']
+        user_inv[found_fish]['count'] = max(0, current_count - amount_to_del)
+        if user_inv[found_fish]['count'] == 0:
+            del user_inv[found_fish]
+            if 'inv_list' in users[target_id] and found_fish in users[target_id]['inv_list']:
+                users[target_id]['inv_list'].remove(found_fish)
+        save_data()
+        bot.reply_to(message, f"🗑 Удалено {amount_to_del} шт. {found_fish} у @{target_username}")
+    else:
+        bot.reply_to(message, "❌ Такая рыба не найдена в инвентаре")
+
+@bot.message_handler(commands=['fishingrod'])
+def fishingrod_admin_command(message):
+    if not is_admin(message.from_user.id, message.from_user.username):
+        return
+    
+    args = message.text.split()
+    if len(args) < 3:
+        bot.reply_to(message, "Используй: /fishingrod [give/delete] [юз] [номер (для give)]")
+        return
+
+    action = args[1].lower()
+    target_username = args[2].replace('@', '')
+    
+    target_id = None
+    for uid, data in users.items():
+        if data.get('username') == target_username:
+            target_id = uid
+            break
+            
+    if not target_id:
+        bot.reply_to(message, "❌ Пользователь не найден")
+        return
+
+    if action == 'delete':
+        users[target_id]['rod'] = '0'
+        save_data()
+        bot.reply_to(message, f"✅ Удочка у @{target_username} аннулирована")
+    elif action == 'give':
+        if len(args) < 4:
+            bot.reply_to(message, "Укажи номер удочки (1-4)")
+            return
+        rod_id = args[3]
+        if rod_id in SHOP_RODS:
+            users[target_id]['rod'] = rod_id
+            save_data()
+            bot.reply_to(message, f"✅ Удочка {SHOP_RODS[rod_id]['name']} выдана @{target_username}")
+        else:
+            bot.reply_to(message, "❌ Нет такой удочки")
 
 @bot.message_handler(commands=['sell'])
 def sell_fish(message):
