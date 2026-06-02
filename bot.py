@@ -26,14 +26,14 @@ bot.set_my_commands([
     types.BotCommand("leaderboards", "Таблица лидеров 🏆")
 ])
 
-# Данные о рыбах (Шансы перевернуты по просьбе админа)
+# Данные о рыбах (баланс редкости: легендарки теперь реально редкие)
 FISH_DATA = {
-    '🟨🟨🟨🟨🟨🟨 Легендарная': {'rarity': 40, 'cost_range': (10000, 50000), 'fishes': ['Мегалодон', 'Посейдон']},
-    '🟥🟥🟥🟥🟥 Мифическая': {'rarity': 30, 'cost_range': (2000, 5000), 'fishes': ['Золотая рыбка', 'Кракен']},
-    '🟪🟪🟪🟪 Эпическая': {'rarity': 15, 'cost_range': (600, 1500), 'fishes': ['Осетр', 'Белуга']},
+    '🟨🟨🟨🟨🟨🟨 Легендарная': {'rarity': 0.5, 'cost_range': (10000, 50000), 'fishes': ['Мегалодон', 'Посейдон']},
+    '🟥🟥🟥🟥🟥 Мифическая': {'rarity': 1.5, 'cost_range': (2000, 5000), 'fishes': ['Золотая рыбка', 'Кракен']},
+    '🟪🟪🟪🟪 Эпическая': {'rarity': 5, 'cost_range': (600, 1500), 'fishes': ['Осетр', 'Белуга']},
     '🟦🟦🟦 Сверх редкая': {'rarity': 10, 'cost_range': (200, 500), 'fishes': ['Сом', 'Угорь', 'Стерлядь']},
-    '🟩🟩 Редкая': {'rarity': 4, 'cost_range': (60, 150), 'fishes': ['Щука', 'Судак', 'Лещ']},
-    '⬜ Обычная': {'rarity': 1, 'cost_range': (10, 50), 'fishes': ['Карась', 'Окунь', 'Плотва']}
+    '🟩🟩 Редкая': {'rarity': 23, 'cost_range': (60, 150), 'fishes': ['Щука', 'Судак', 'Лещ']},
+    '⬜ Обычная': {'rarity': 60, 'cost_range': (10, 50), 'fishes': ['Карась', 'Окунь', 'Плотва']}
 }
 
 SHOP_RODS = {
@@ -278,7 +278,7 @@ def get_fish(message):
     current_loc = LOCATIONS_DATA.get(user.get('location', '0'), LOCATIONS_DATA['0'])
     luck = current_loc['luck']
     
-    msg = bot.send_message(message.chat.id, f"📍 Локация: {current_loc['name']}\n🦾 Снаряжение: {current_rod['name']} 🎣{bait_text}\n\n🌊 Закидываем удочку...", message_thread_id=message.message_thread_id)
+    msg = bot.send_message(message.chat.id, f"📍 {current_loc['name']}\nУдочка: {current_rod['name']}🎣{bait_text}\nЗакидываем...", message_thread_id=message.message_thread_id)
     
     # Удача влияет на шанс: делим ролл на коэффициент удачи
     rand = (random.random() * 100) / luck
