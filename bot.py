@@ -21,6 +21,7 @@ bot.set_my_commands([
     types.BotCommand("inventory", "Посмотреть улов 📦"),
     types.BotCommand("sell", "Продать рыбу 💰"),
     types.BotCommand("shop", "Магазин снаряжения 🛒"),
+    types.BotCommand("location", "Сменить локацию 🗺️"),
     types.BotCommand("index", "Список всех рыб 🐟"),
     types.BotCommand("leaderboards", "Таблица лидеров 🏆")
 ])
@@ -48,6 +49,14 @@ SHOP_BAITS = {
     '2': {'name': '🐛 Живой опарыш', 'cost': 1500, 'amount': 10, 'multiplier': 1.5},
     '3': {'name': '✨ Золотая блесна', 'cost': 7890, 'amount': 5, 'multiplier': 2.5},
     '4': {'name': '🧪 Атрактант Х', 'cost': 50000, 'amount': 3, 'multiplier': 5.0}
+}
+
+LOCATIONS_DATA = {
+    '0': {'name': '🏖️ Обычный берег', 'cost': 0, 'luck': 1.0},
+    '1': {'name': '🏚️ Заброшенный пруд', 'cost': 10000, 'luck': 1.2},
+    '2': {'name': '🏔️ Горная река', 'cost': 50000, 'luck': 1.5},
+    '3': {'name': '🌌 Таинственное озеро', 'cost': 250000, 'luck': 2.0},
+    '4': {'name': '🌋 Океанская бездна', 'cost': 1000000, 'luck': 3.5}
 }
 
 # База данных пользователей
@@ -84,6 +93,8 @@ def get_user_data(user_id, username=None):
             'inventory': {},
             'last_fish': 0,
             'rod': '0',
+            'location': '0',
+            'unlocked_locations': ['0'],
             'baits': {},
             'username': username or f"ID {user_id}",
             'stats': {'total_caught': 0, 'total_earned': 0}
@@ -99,6 +110,8 @@ def get_user_data(user_id, username=None):
         'inventory': {},
         'last_fish': 0,
         'rod': '0',
+        'location': '0',
+        'unlocked_locations': ['0'],
         'baits': {},
         'stats': {'total_caught': 0, 'total_earned': 0}
     }
@@ -173,7 +186,6 @@ def money_admin_command(message):
         return
     
     args = message.text.split()
-    # Формат: /money give @username 100
     if len(args) < 4 or args[1] != 'give':
         return
 
@@ -261,9 +273,15 @@ def get_fish(message):
         bait_info = SHOP_BAITS[active_bait_id]
         multiplier = bait_info['multiplier']
         user['baits'][active_bait_id] -= 1
-        bait_text = f"\n✨ Используется наживка: {bait_info['name']} (x{multiplier})"
-    msg = bot.send_message(message.chat.id, f"Удочка: {current_rod['name']}🎣{bait_text}\nЗакидываем...", message_thread_id=message.message_thread_id)
-    rand = random.random() * 100
+        bait_text = f"\n✨ Наживка: {bait_info['name']} (x{multiplier})"
+    
+    current_loc = LOCATIONS_DATA.get(user.get('location', '0'), LOCATIONS_DATA['0'])
+    luck = current_loc['luck']
+    
+    msg = bot.send_message(message.chat.id, f"📍 {current_loc['name']}\nУдочка: {current_rod['name']}🎣{bait_text}\nЗакидываем...", message_thread_id=message.message_thread_id)
+    
+    # Удача влияет на шанс: делим ролл на коэффициент удачи
+    rand = (random.random() * 100) / luck
     cumulative = 0
     selected_rarity = '⬜ Обычная'
     for rarity, data in FISH_DATA.items():
@@ -291,6 +309,60 @@ def show_leaderboards(message):
     btn_group = types.InlineKeyboardButton("👥 В этой группе", callback_data="lb_group")
     markup.add(btn_global, btn_group)
     bot.send_message(message.chat.id, "🏆 **Выберите таблицу лидеров по деньгам:**", reply_markup=markup, parse_mode='Markdown', message_thread_id=message.message_thread_id)
+
+@bot.message_handler(commands=['location'])
+def show_locations(message):
+    user = get_user_data(message.from_user.id, message.from_user.username)
+    markup = types.InlineKeyboardMarkup()
+    text = "🗺️ **Доступные локации:**\n\n"
+    
+    for loc_id, loc in LOCATIONS_DATA.items():
+        is_unlocked = loc_id in user.get('unlocked_locations', ['0'])
+        status = "✅ Выбрано" if user.get('location') == loc_id else ("🔓 Открыто" if is_unlocked else f"💰 {loc['cost']}")
+        text += f"*{loc['name']}*\n— Удача: x{loc['luck']}\n— Статус: {status}\n\n"
+        
+        if user.get('location') != loc_id:
+            btn_text = f"Переехать в {loc['name']}" if is_unlocked else f"Купить {loc['name']}"
+            markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"loc_{loc_id}"))
+            
+    bot.send_message(message.chat.id, text, reply_markup=markup, parse_mode='Markdown', message_thread_id=message.message_thread_id)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('loc_'))
+def handle_location_change(call):
+    user = get_user_data(call.from_user.id)
+    loc_id = call.data.split('_')[1]
+    loc = LOCATIONS_DATA[loc_id]
+    
+    unlocked = user.get('unlocked_locations', ['0'])
+    
+    if loc_id in unlocked:
+        user['location'] = loc_id
+        save_data()
+        bot.answer_callback_query(call.id, f"🚀 Вы переехали в {loc['name']}")
+    else:
+        if user['balance'] >= loc['cost']:
+            user['balance'] -= loc['cost']
+            user['unlocked_locations'].append(loc_id)
+            user['location'] = loc_id
+            save_data()
+            bot.answer_callback_query(call.id, f"🎉 Локация {loc['name']} куплена и выбрана!")
+        else:
+            bot.answer_callback_query(call.id, "❌ Недостаточно средств для переезда!")
+    
+    # Обновляем сообщение (повторный вызов логики отрисовки)
+    try:
+        new_text = "🗺️ **Доступные локации:**\n\n"
+        markup = types.InlineKeyboardMarkup()
+        for lid, linfo in LOCATIONS_DATA.items():
+            is_unlocked = lid in user.get('unlocked_locations', ['0'])
+            status = "✅ Выбрано" if user.get('location') == lid else ("🔓 Открыто" if is_unlocked else f"💰 {linfo['cost']}")
+            new_text += f"*{linfo['name']}*\n— Удача: x{linfo['luck']}\n— Статус: {status}\n\n"
+            if user.get('location') != lid:
+                btn_txt = f"Переехать в {linfo['name']}" if is_unlocked else f"Купить {linfo['name']}"
+                markup.add(types.InlineKeyboardButton(btn_txt, callback_data=f"loc_{lid}"))
+        bot.edit_message_text(new_text, call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown')
+    except:
+        pass
 
 @bot.message_handler(commands=['index'])
 def show_index(message):
